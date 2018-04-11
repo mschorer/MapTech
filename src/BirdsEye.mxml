@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Application 
+	creationComplete="initUI();" 
+	xmlns:mx="http://www.adobe.com/2006/mxml"
+	xmlns:ns1="de.ms_ite.maptech.containers.*" 
+	layout="vertical" paddingBottom="2" paddingLeft="2" paddingRight="2" paddingTop="2">
+	<mx:Script>
+		<![CDATA[
+		 	import de.ms_ite.maptech.containers.CompatLayer;
+ 			import de.ms_ite.maptech.containers.MetaLayer;
+ 			import de.ms_ite.*;
+ 			import de.ms_ite.maptech.*;
+ 			import de.ms_ite.maptech.mapinfo.*;
+ 			import de.ms_ite.maptech.layers.*;
+ 			import de.ms_ite.maptech.symbols.*;
+ 			
+ 			protected var loadQueue:LoadQueue;
+ 			
+			protected function initUI():void {
+				debug( "waiting ...");
+				
+ 				loadQueue = new LoadQueue();
+ 				loadQueue.PARLOADS = 5;
+ 				loadQueue.addEventListener( ProgressEvent.PROGRESS, handleProgress);
+ 				pbLoad.source = loadQueue;
+				
+				var m:MapInfoVEBirdsEye = new MapInfoVEBirdsEye();
+				tl.mapInfo = m; 
+
+				tl.viewport = new Bounds( 11.56, 48.11, 11.58, 48.13);
+
+				addLayer( m);
+/*				
+				var reicheteile7:Point = new Point( 10.832198, 48.024807);
+				
+				var erpfting:Bounds = new Bounds();
+				erpfting.left = reicheteile7.x - 0.012; 
+				erpfting.right = reicheteile7.x + 0.01;
+				erpfting.top = reicheteile7.y + 0.01;
+				erpfting.bottom = reicheteile7.y - 0.012;
+				
+				tl.viewport = erpfting;
+*/				
+				tl.updateView();
+ 			}
+ 			
+ 			protected function addLayer( mi:MapInfo):void {
+ 				var temp:BirdsEyeLayer = new BirdsEyeLayer();
+				temp.loadQueue = loadQueue;
+				temp.mapInfo = mi;
+				temp.priority = 1;
+				tl.addChild( temp);
+				
+				tl.updateView();
+ 			}
+ 			
+ 			protected function handleProgress( evt:ProgressEvent):void {
+	//			debug( "progress: "+evt.bytesLoaded+" / "+evt.bytesTotal);
+				var pe:ProgressEvent = new ProgressEvent( ProgressEvent.PROGRESS);
+				pe.bytesLoaded = evt.bytesLoaded;
+				pe.bytesTotal = evt.bytesTotal;
+				dispatchEvent( pe);
+			}
+			
+ 			protected function debug( txt:String):void {
+ 				trace( "DBG: "+txt);
+ 			}
+		]]>
+	</mx:Script>
+	<ns1:Lighttable id="tl" width="100%" height="100%" >
+	</ns1:Lighttable>
+	<mx:ProgressBar id="pbLoad" />
+</mx:Application>

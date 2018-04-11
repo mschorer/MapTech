@@ -1,0 +1,203 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Application 
+	xmlns:fx="http://ns.adobe.com/mxml/2009" 
+	xmlns:s="library://ns.adobe.com/flex/spark" 
+	xmlns:mx="library://ns.adobe.com/flex/mx"
+	xmlns:ns1="de.ms_ite.maptech.containers.*" 
+	creationComplete="initUI();">
+	<fx:Script>
+		<![CDATA[
+			import de.ms_ite.*;
+			import de.ms_ite.maptech.*;
+			import de.ms_ite.maptech.containers.CompatLayer;
+			import de.ms_ite.maptech.containers.MetaLayer;
+			import de.ms_ite.maptech.layers.*;
+			import de.ms_ite.maptech.mapinfo.*;
+			import de.ms_ite.maptech.symbols.*;
+			import de.ms_ite.maptech.symbols.styles.*;
+			
+			import mx.collections.ArrayCollection;
+ 			
+ 			protected var loadQueue:LoadQueue;
+			
+			protected var ptStyle:SymbolStyle;
+			protected var geoLayer:UISymbolLayer;
+
+			protected var geomLayer:SymbolLayer;
+			
+			protected var posMap:ArrayCollection;
+ 			
+			protected function initUI():void {
+				ExternalInterface.addCallback( 'setPosition', setPosition);
+				ExternalInterface.addCallback( 'setError', setError);
+				
+				debug( "waiting ...");
+				
+				ExternalInterface.call( 'autorun');
+
+ 				loadQueue = new LoadQueue();
+ 				loadQueue.PARLOADS = 5;
+ 				loadQueue.addEventListener( ProgressEvent.PROGRESS, handleProgress);
+ 				pbLoad.source = loadQueue;
+				
+				var m:MapInfoOpenStreetMap = new MapInfoOpenStreetMap();
+				tl.mapInfo = m; 
+				tl.viewport = m.bounds.clone();
+
+				addLayer( m);
+/*				
+				var reicheteile7:Point = new Point( 10.832198, 48.024807);
+				
+				var erpfting:Bounds = new Bounds();
+				erpfting.left = reicheteile7.x - 0.012; 
+				erpfting.right = reicheteile7.x + 0.01;
+				erpfting.top = reicheteile7.y + 0.01;
+				erpfting.bottom = reicheteile7.y - 0.012;
+				
+				tl.viewport = erpfting;
+*/				
+
+				ptStyle = new SymbolStyle();
+				ptStyle.normal.line.color = 0x40ff40;
+				ptStyle.normal.line.width = 6;
+				ptStyle.selected.line.color = 0x40ff40;
+				ptStyle.selected.line.width = 6;
+				ptStyle.icon.color = 0xff0000;
+				ptStyle.icon.icon = 'Hexa';
+
+				/*				
+				geom = new SymbolLayer();
+				geom.style = defStyle;
+				geom.symbolClass = de.ms_ite.maptech.symbols.GeomSymbol;
+				tl.addChild( geom);
+				*/				
+				
+				posMap = new ArrayCollection();
+				
+				geoLayer = new UISymbolLayer();
+				geoLayer.style = ptStyle;
+				geoLayer.symbolClass = MaptechSymbol;				
+				geoLayer.dataProvider = posMap;
+				tl.addChild( geoLayer);
+
+				
+				geomLayer = new SymbolLayer();
+				geomLayer.style = ptStyle;
+				geomLayer.symbolClass = IconSymbol;				
+				geomLayer.dataProvider = posMap;
+				tl.addChild( geomLayer);
+
+/*				
+				var defPos:Object = new Object();
+				defPos.longitude = 11.2;
+				defPos.latitude = 48.2;
+				defPos.title = 'defPost';
+				
+				posMap.addItem( defPos);
+*/				
+				tl.updateView();
+ 			}
+			
+			protected function onUpdate( evt:Event):void {
+				ExternalInterface.call( 'getPos');
+			}
+ 			
+ 			protected function setPosition( pobj:Object):void {
+ 				lat.text = pobj.latitude;
+ 				lon.text = pobj.longitude;
+ 				elev.text = pobj.altitude;
+				acc_pos = pobj.accuracy;
+				acc_alt.text = pobj.altitudeAccuracy;
+				dir.text = pobj.heading
+				spd.text = pobj.velocity;
+				timestamp.text = pobj.timestamp;
+
+ 				res.text = '0 - OK';  			
+
+				pobj.geometry = null;
+				
+				posMap.addItem( pobj);
+//				geoLayer.updateView();
+ 			}
+ 			
+ 			protected function setError( eobj:Object):void {
+ 				debug( "err: "+eobj.code+" / "+eobj.message);
+ 				timestamp.text = new Date().toLocaleString();
+ 				res.text = ''+eobj.code+' - '+eobj.message;  				
+ 			}
+ 			
+ 			protected function addLayer( mi:MapInfo):void {
+ 				var temp:AdaptiveLayer = new AdaptiveLayer();
+				temp.loadQueue = loadQueue;
+				temp.mapInfo = mi;
+				temp.priority = 1;
+				tl.addChild( temp);
+				
+				tl.updateView();
+ 			}
+ 			
+ 			protected function handleProgress( evt:ProgressEvent):void {
+	//			debug( "progress: "+evt.bytesLoaded+" / "+evt.bytesTotal);
+				var pe:ProgressEvent = new ProgressEvent( ProgressEvent.PROGRESS);
+				pe.bytesLoaded = evt.bytesLoaded;
+				pe.bytesTotal = evt.bytesTotal;
+				dispatchEvent( pe);
+			}
+			
+ 			protected function debug( txt:String):void {
+ 				trace( "DBG: "+txt);
+ 			}
+		]]>
+	</fx:Script>
+	<mx:Canvas width="100%" height="100%">
+		<ns1:Lighttable id="tl" width="100%" height="100%" >
+			<mx:Panel layout="absolute" title="GeoLocation" horizontalAlign="left" verticalAlign="top" width="350" right="10" top="10" height="430" backgroundAlpha="0.7">
+				<mx:Form width="100%" height="100%">
+					<mx:FormItem label="Lat" width="100%">
+						<mx:TextInput id="lat" width="100%"/>
+					</mx:FormItem>
+					<mx:FormItem label="Lon" width="100%">
+						<mx:TextInput id="lon" width="100%"/>
+					</mx:FormItem>
+					<mx:FormItem label="Hgt" width="100%">
+						<mx:TextInput id="elev" width="100%"/>
+					</mx:FormItem>
+					<mx:FormItem width="100%" height="4">
+						<mx:HRule width="100%"/>
+					</mx:FormItem>
+					<mx:FormItem label="dir" width="100%">
+						<mx:TextInput id="dir" width="100%"/>
+					</mx:FormItem>
+					<mx:FormItem label="spd" width="100%">
+						<mx:TextInput id="spd" width="100%"/>
+					</mx:FormItem>
+					<mx:FormItem width="100%" height="4">
+						<mx:HRule width="100%"/>
+					</mx:FormItem>
+					<mx:FormItem label="acc pos" width="100%">
+						<mx:TextInput id="acc_pos" width="100%"/>
+					</mx:FormItem>
+					<mx:FormItem label="acc elev" width="100%">
+						<mx:TextInput id="acc_alt" width="100%"/>
+					</mx:FormItem>
+					<mx:FormItem width="100%" height="4">
+						<mx:HRule width="100%"/>
+					</mx:FormItem>
+					<mx:FormItem label="timestamp" width="100%">
+						<mx:TextInput id="timestamp" width="100%"/>
+					</mx:FormItem>
+					<mx:FormItem width="100%" height="4">
+						<mx:HRule  width="100%"/>
+					</mx:FormItem>
+					<mx:FormItem label="res" width="100%">
+						<mx:TextInput id="res" width="100%"/>
+					</mx:FormItem>
+					<mx:FormItem>
+						<s:Button label="Update!" click="onUpdate( event);"/>
+					</mx:FormItem>
+					<mx:ProgressBar width="100%" id="pbLoad"/>
+				</mx:Form>
+			</mx:Panel>
+		</ns1:Lighttable>
+	</mx:Canvas>
+</s:Application>

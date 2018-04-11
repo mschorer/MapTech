@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Application xmlns:mx="http://www.adobe.com/2006/mxml" layout="absolute"
+	xmlns:ns1="de.ms_ite.maptech.containers.*" 
+	width="440" height="440" 
+	horizontalScrollPolicy="off" verticalScrollPolicy="off"
+	creationComplete="initUI();" 
+ 	paddingBottom="0" paddingLeft="0" paddingRight="0" paddingTop="0">
+	<mx:Script>
+		<![CDATA[
+ 			import de.ms_ite.maptech.projections.*;
+		
+			var mySprite:Sprite = new Sprite();
+
+ 			protected function initUI():void {
+
+				mySprite = new Sprite();
+				mySprite.graphics.beginFill(0xFFCC00);
+				this.rawChildren.addChild(mySprite);
+				
+				projecTest();
+
+				var pj:ProjectionMercator = new ProjectionMercator();
+				
+				var s:Point = new Point( pj.toRad( 0), pj.toRad( 28));
+				var z:Point = pj.linearize( s);
+				var h:Point = pj.delinearize( z);
+				
+				var d:Number = 28;
+				var r:Number = pj.toRad( d);
+				var p:Number = pj.linearizeY( r);
+				
+				var l:Number = pj.delinearizeY( p);
+				var g:Number = pj.toDeg( l);
+				debug( "## "+d+" rad:"+r+" lin:"+p+" delin:"+l+" deg:"+g);
+				debug( "## "+s+" lin:"+z+" delin:"+h);
+ 			}
+ 			
+ 			protected function projecTest():void {
+				var pj:ProjectionMercator = new ProjectionMercator();
+				
+/*				
+				var p:Point = new Point( 10.8319, 48.0251);
+				debug( "in  deg: "+p);
+				var r:Point = new Point( pj.toRad( p.x), pj.toRad( p.y));
+				debug( "in  rad: "+r);
+				var l:Point = pj.linearize( r);
+				debug( "lin    : "+l);
+				var u:Point = pj.delinearize( l);
+				debug( "delin  : "+u);
+				var d:Point = new Point( pj.toDeg( u.x), pj.toDeg( u.y));
+				debug( "out deg: "+p);
+*/	
+				var s:Point, z:Point, h:Point;
+				
+				for ( var x:int = -200; x <= 200; x += 10) {
+					for ( var y:int = -200; y <= 200; y += 10) {
+						
+	//					if ( Math.abs( y) < 80) continue;
+						s = new Point( pj.toRad( x), pj.toRad( y));
+						z = pj.linearize( s);
+						h = pj.delinearize( s);
+						
+						var d:Number = y;
+						var r:Number = pj.toRad( d);
+						var p:Number = pj.linearizeY( r);
+						
+						mySprite.graphics.beginFill(0xFFCC00, 0.7);
+						mySprite.graphics.drawCircle( 217 - pj.toDeg( z.x), 220 - pj.toDeg( z.y), 2);
+
+						mySprite.graphics.beginFill(0x00FFCC, 0.7);
+						mySprite.graphics.drawCircle( 222 - pj.toDeg( h.x), 220 - pj.toDeg( h.y), 2);
+						
+						var l:Number = pj.delinearizeY( p);
+						var g:Number = pj.toDeg( l);
+//						debug( "  "+d+" rad:"+r+" lin:"+p+" delin:"+l+" deg:"+g);
+					}
+				} 				
+ 			}
+ 			
+ 			protected function debug( txt:String):void {
+ 				trace( "DBG: "+txt);
+ 			}
+		]]>
+	</mx:Script>
+</mx:Application>

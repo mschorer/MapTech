@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<services-config>
+	<services>
+		<service id="amfphp-flashremoting-service" class="flex.messaging.services.RemotingService" messageTypes="flex.messaging.messages.RemotingMessage">
+			<destination id="amfphp">
+				<channels>
+					<channel ref="my_amfphp"/>
+				</channels>
+				<properties>
+					<source>*</source>
+				</properties>
+			</destination>
+		</service>
+	</services>
+	<channels>
+		<channel-definition id="my_amfphp" class="mx.messaging.channels.AMFChannel">
+			<endpoint uri="http://www.alrightythen.de/amfx/gateway.php" class="flex.messaging.endpoints.AMFEndpoint" />
+			<!-- endpoint uri="/amfx/gateway.php" class="flex.messaging.endpoints.AMFEndpoint" / -->
+		</channel-definition>
+	</channels>
+</services-config>

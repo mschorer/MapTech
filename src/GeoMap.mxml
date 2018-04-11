@@ -1,0 +1,309 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Application xmlns:fx="http://ns.adobe.com/mxml/2009" 
+			   xmlns:s="library://ns.adobe.com/flex/spark" 
+			   xmlns:mx="library://ns.adobe.com/flex/mx" 
+			   xmlns:ns1="de.ms_ite.maptech.containers.*" 
+			   creationComplete="initUI();">
+	<fx:Declarations>
+		<!-- Platzieren Sie nichtvisuelle Elemente (z. B. Dienste, Wertobjekte) hier -->
+		<s:LayoutBase />
+		<!-- s:RemoteObject id="geoLocationService" fault="faultHandler( event)" source="GeolocationService" destination="amfphp">
+			<s:method name="getLocations" result="updateLocations( event)" />
+			<s:method name="getCurrent" result="updatePosition( event)" />
+		</s:RemoteObject -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import de.ms_ite.*;
+			import de.ms_ite.maptech.*;
+			import de.ms_ite.maptech.containers.CompatLayer;
+			import de.ms_ite.maptech.containers.MetaLayer;
+			import de.ms_ite.maptech.layers.*;
+			import de.ms_ite.maptech.mapinfo.*;
+			import de.ms_ite.maptech.symbols.*;
+			import de.ms_ite.maptech.symbols.styles.*;
+			
+			import mx.collections.ArrayCollection;
+			
+			import mx.messaging.ChannelSet;
+			import mx.messaging.channels.AMFChannel;
+			import mx.rpc.remoting.RemoteObject;
+			import mx.rpc.AbstractOperation;
+			import mx.rpc.AsyncResponder;
+			import mx.rpc.AsyncToken;
+			import mx.rpc.Responder;
+			import mx.rpc.events.FaultEvent;
+
+			import mx.rpc.events.FaultEvent;
+			import mx.rpc.events.ResultEvent;
+			
+			public static var serviceURL:String = "/amfx/index.php";
+			public static var serviceName:String = "Geolocation";
+			
+			protected var loadQueue:LoadQueue;
+			
+			protected var geomLayer:SymbolLayer;
+			protected var currLayer:SymbolLayer;
+			
+			protected var posMap:ArrayCollection;
+			protected var currMap:ArrayCollection;
+			
+			protected static var rObject:RemoteObject;
+			
+			protected function initUI():void {
+				debug( "waiting ...");
+				
+				initRemoting();
+				
+				loadQueue = new LoadQueue();
+				loadQueue.PARLOADS = 5;
+				loadQueue.addEventListener( ProgressEvent.PROGRESS, handleProgress);
+				
+				pbLoad.source = loadQueue;
+				
+//				var m:MapInfoOpenStreetMap = new MapInfoOpenStreetMap();
+				var m:MapInfoBlueMarble = new MapInfoBlueMarble();
+				tl.mapInfo = m; 
+				tl.viewport = m.bounds.clone();
+				
+				addLayer( m);
+				/*				
+				var reicheteile7:Point = new Point( 10.832198, 48.024807);
+				
+				var erpfting:Bounds = new Bounds();
+				erpfting.left = reicheteile7.x - 0.012; 
+				erpfting.right = reicheteile7.x + 0.01;
+				erpfting.top = reicheteile7.y + 0.01;
+				erpfting.bottom = reicheteile7.y - 0.012;
+				
+				tl.viewport = erpfting;
+				*/				
+				
+				var ptStyle:SymbolStyle = new SymbolStyle();
+				ptStyle.normal.line.color = 0x00a000;
+				ptStyle.normal.line.width = 1;
+				ptStyle.normal.surface.color = 0x00c000;
+				ptStyle.selected.line.color = 0x00c000;
+				ptStyle.selected.line.width = 1;
+				ptStyle.selected.surface.color = 0x00c000;
+				
+				ptStyle.icon.color = 0x40c040;
+				
+				posMap = new ArrayCollection();
+
+				geomLayer = new SymbolLayer();
+				geomLayer.style = ptStyle;
+				geomLayer.symbolClass = MaptechSymbol;				
+				geomLayer.dataProvider = posMap;
+				tl.addChild( geomLayer);
+				
+				
+				var ptStyle2:SymbolStyle = new SymbolStyle();
+				ptStyle2.normal.line.color = 0xff0000;
+				ptStyle2.normal.line.width = 1;
+				ptStyle2.normal.surface.color = 0xff0000;
+				ptStyle2.selected.line.color = 0xff0000;
+				ptStyle2.selected.line.width = 1;
+				ptStyle2.selected.surface.color = 0xff0000;
+				ptStyle2.icon.color = 0xff4040;
+
+				currMap = new ArrayCollection();
+
+				currLayer = new SymbolLayer();
+				currLayer.style = ptStyle2;
+				currLayer.symbolClass = MaptechSymbol;				
+				currLayer.dataProvider = currMap;
+				tl.addChild( currLayer);
+
+				tl.updateView();
+				
+//				geoLocationService.getOperation( 'getCurrent').send();
+				
+				callService( 'getCurrent', updatePosition);
+			}
+			
+			public function initRemoting():void {
+				if ( rObject == null) {
+					rObject = new RemoteObject();
+					
+					var channelSet:ChannelSet = new ChannelSet();
+					var amfChannel:AMFChannel = new AMFChannel( "amfphp", serviceURL);
+					channelSet.addChannel( amfChannel);
+					
+					rObject.channelSet = channelSet;
+					rObject.destination = "amfphp";
+					
+					rObject.source = serviceName;
+					
+					debug( "remoting intialized. ["+serviceURL+"]["+serviceName+"]");
+				}
+			}			
+						
+			public function callService( method:String, result:Function, fault:Function=null, token:Object=null):void {
+				debug( "callService ["+method+"]");
+				initRemoting();
+				
+				if ( fault == null) fault = faultHandler;
+				
+				//			method = getOperationName( method);
+				
+				var ro:AbstractOperation = rObject.getOperation( getOperationName( method));
+				
+				var rpcCall:AsyncToken = execServiceCall( ro, method, token);
+				
+				// attach the token-attributes
+				if ( token != null) {
+					for ( var tag:String in token) {
+						rpcCall[ tag] = token[ tag];
+					}
+				}
+				
+				rpcCall.addResponder( new AsyncResponder( result, fault, rpcCall));
+			}
+			
+			protected function execServiceCall( ao:AbstractOperation, method:String, token:Object):AsyncToken {
+				var at:AsyncToken = null;
+				
+				switch( method) {
+					/*
+					case 'sync':
+					return ao.send( this, cache_modified);
+					break;
+					
+					case 'save':
+					return ao.send( this);
+					break;
+					*/				
+					case 'getCurrent':
+						at = ao.send();	// ip
+						break;
+					
+					case 'getLocations':
+						at = ao.send();	// ts
+						break;
+				}
+				
+				return at;
+			}
+			
+			protected function getOperationName( method:String):String {
+				var mthd:String = '';
+				switch( method) {
+					case 'current': mthd = 'getCurrent'; break;
+					case 'list': mthd = 'getLocations'; break;
+					
+					default:
+						mthd = method;
+				}
+				
+				return mthd;
+			}
+			
+			//----------------------------------------------------------------------------------------
+			// general fault handler
+			
+			public function faultHandler( fault:FaultEvent, token:Object=null):void {
+				error( "err: "+fault);
+				error( "obj: "+this.toString());
+				error( "code:\n" + fault.fault.faultCode + "\n\nMessage:\n" + fault.fault.faultString + "\n\nDetail:\n" + fault.fault.faultDetail);				
+				error( "service error!");
+			}
+			
+			//----------------------------------------------------------------------------------------
+			// booting the app
+			
+			protected function updatePosition( evt:ResultEvent, token:Object=null):void {
+				var i:int;
+				
+				var res:Array = evt.result as Array;
+				
+				if ( currMap == null) currMap = new ArrayCollection();
+				
+				for( i = 0; i < res.length; i++) {
+					var pos:Object = Object( res[i]);
+
+					pos[ 'geometry'] = getGeometry( pos.longitude, pos.latitude, pos.count);
+					
+					currMap.addItem( pos);
+				}
+
+//				geoLocationService.getOperation( 'getLocations').send();
+				
+				callService( 'getLocations', updateLocations);
+			}
+
+			protected function updateLocations( evt:ResultEvent, token:Object=null):void {
+				var i:int;
+				
+				var res:Array = evt.result as Array;
+				
+				if ( posMap == null) posMap = new ArrayCollection();
+					
+				for( i = 0; i < res.length; i++) {
+					var pos:Object = Object( res[i]);
+					
+					pos[ 'geometry'] = getGeometry( pos.longitude, pos.latitude, pos.count);
+
+					posMap.addItem( pos);
+				}
+			}
+			
+			protected function getGeometry( x:Number, y:Number, count:int) {
+				var radius:Number = Math.sqrt( Math.max( 5, count));
+				
+				var first:String = null;
+				var list:Array = new Array();
+				
+				var steps:int = Math.min( 8, Math.max( count, 5));
+				var phi:Number = 2 * Math.PI / steps;
+				var deg:Number = 0;
+				
+				for( var i:int = 0; i < steps; i++) {
+					var pt:String = (x + 2 * radius * Math.sin( deg))+" "+( y + radius * Math.cos( deg));
+					if ( first == null) first = pt;
+					
+					list.push( pt);
+					
+					deg += phi;
+				}
+				if ( first != null) list.push( first);
+				
+				
+				return "POLYGON(("+list.join( ", ")+"))";
+			}
+			
+			protected function addLayer( mi:MapInfo):void {
+				var temp:AdaptiveLayer = new AdaptiveLayer();
+				temp.loadQueue = loadQueue;
+				temp.mapInfo = mi;
+				temp.priority = 1;
+				tl.addChild( temp);
+				
+				tl.updateView();
+			}
+			
+			protected function handleProgress( evt:ProgressEvent):void {
+				//			debug( "progress: "+evt.bytesLoaded+" / "+evt.bytesTotal);
+				var pe:ProgressEvent = new ProgressEvent( ProgressEvent.PROGRESS);
+				pe.bytesLoaded = evt.bytesLoaded;
+				pe.bytesTotal = evt.bytesTotal;
+				
+				pbLoad.visible = ( pe.bytesLoaded != pe.bytesTotal);
+				
+				dispatchEvent( pe);
+			}
+			
+			protected function debug( txt:String):void {
+				trace( "DBG: "+txt);
+			}
+			protected function error( txt:String):void {
+				trace( "ERR: "+txt);
+			}
+		]]>
+	</fx:Script>
+	<mx:Canvas width="100%" height="100%">
+		<ns1:Lighttable id="tl" width="100%" height="100%" >
+			<mx:ProgressBar id="pbLoad" label="" right="5" bottom="5" labelPlacement="top"/>
+		</ns1:Lighttable>
+	</mx:Canvas>
+</s:Application>

@@ -1,0 +1,308 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Application 
+	xmlns:mx="http://www.adobe.com/2006/mxml" 
+	layout="vertical" 
+	xmlns:ns1="de.ms_ite.maptech.containers.*" 
+	width="100%" height="100%" 
+	horizontalScrollPolicy="off" verticalScrollPolicy="off"
+	creationComplete="initUI();" 
+ 	paddingBottom="0" paddingLeft="0" paddingRight="0" paddingTop="0">
+	<!-- mx:RemoteObject id="tmc" fault="faultHandler( event)" source="TMCService" destination="amfphp">
+	    <mx:method name="getTMC" result="handleTMC( event)" />
+	</mx:RemoteObject -->
+ 	<mx:Script>
+ 		<![CDATA[
+ 			import mx.controls.Alert;
+			import mx.rpc.events.ResultEvent;
+			import mx.rpc.events.FaultEvent;
+			import mx.utils.ArrayUtil;
+
+ 			import de.ms_ite.maptech.containers.CompatLayer;
+ 			import de.ms_ite.maptech.containers.MetaLayer;
+ 			import de.ms_ite.*;
+ 			import de.ms_ite.maptech.*;
+ 			import de.ms_ite.maptech.layers.*;
+ 			import de.ms_ite.maptech.mapinfo.*;
+ 			import de.ms_ite.maptech.symbols.*;
+ 			import de.ms_ite.maptech.symbols.styles.*;
+ 			import de.ms_ite.maptech.tools.*;
+
+			import mx.events.*;
+ 			import mx.controls.Image;
+ 			import mx.collections.ArrayCollection;
+
+//			import com.pixelbreaker.ui.osx.MacMouseWheel;
+
+ 			protected var version:String = "1.0";
+ 			
+ 			protected var wbeq:BirdsEyeParameterService;
+
+ 			protected var symData:Array = [
+ 				];
+ 				
+ 			protected var symChart:Array = [
+				];
+ 			
+ 			protected var bounds:Bounds;
+ 			protected var mi:MapInfo;
+ 			
+ 			protected var mapLayers:Array;
+ 			
+ 			protected var loadQueue:LoadQueue;
+ 			
+ 			protected var defStyle:SymbolStyle;
+			protected var loc:SymbolLayer;
+			protected var ext:SymbolLayer;
+			
+//			protected var mbase:MapInfo, movl:MapInfo;
+			
+ 			protected var dataProvider:ArrayCollection;
+  			protected var chartProvider:ArrayCollection;
+ 			
+ 			[Bindable]
+ 			protected var maplist:ArrayCollection;
+
+ 			[Bindable]
+ 			protected var vislist:ArrayCollection;
+ 			
+ 			protected function initUI():void {
+ 				copyright.text += ' '+version;
+ 				
+ 				maplist = new ArrayCollection();
+ 				vislist = new ArrayCollection();
+ 				
+ 				dataProvider = new ArrayCollection();	// symData);
+ 				chartProvider = new ArrayCollection();	// symChart);
+ 				
+ 				mapLayers = new Array();
+ 					
+ 				// Draw a square and add it to the display list.
+
+				maplist = new ArrayCollection();
+								
+				lVisi.addEventListener( DragEvent.DRAG_DROP, handleAdd);
+				lVisi.addEventListener( DragEvent.DRAG_COMPLETE, handleRemove);
+				 				
+ 				var item:Object;
+				var lay:MapLayer;
+
+ 				loadQueue = new LoadQueue();
+ 				loadQueue.PARLOADS = 5;
+ 				loadQueue.addEventListener( ProgressEvent.PROGRESS, handleProgress);
+ 				pbLoad.source = loadQueue;
+
+				mi = null;
+				var ladded:int = 0;
+				
+				var mlist:Array = new Array();
+				
+				mlist.push( new MapInfoMicrosoft( MapInfo.MODE_AERIAL));
+				mlist.push( new MapInfoMicrosoft( MapInfo.MODE_MAP));
+				mlist.push( new MapInfoMicrosoft( MapInfo.MODE_HYBRID));
+
+				mlist.push( new MapInfoYahoo( MapInfo.MODE_OVERLAY));
+				mlist.push( new MapInfoYahoo( MapInfo.MODE_MAP));
+				mlist.push( new MapInfoYahoo( MapInfo.MODE_AERIAL));
+				mlist.push( new MapInfoYahoo( MapInfo.MODE_OVERLAY1));
+
+				mlist.push( new MapInfoGoogle( MapInfo.MODE_OVERLAY));
+				mlist.push( new MapInfoGoogle( MapInfo.MODE_MAP));
+				mlist.push( new MapInfoGoogle( MapInfo.MODE_AERIAL));
+
+//				mlist.push( new MapInfoDailyPlanet());
+
+				mlist.push( new MapInfoOpenStreetMap());
+
+				mlist.push( new MapInfoBlueMarble());
+				
+				mlist.push( new MapInfoGoogle( MapInfo.MODE_EXT_MOON));
+				mlist.push( new MapInfoGoogle( MapInfo.MODE_EXT_MARS_VIS));
+				mlist.push( new MapInfoGoogle( MapInfo.MODE_EXT_MARS_IR));
+				mlist.push( new MapInfoGoogle( MapInfo.MODE_EXT_MARS_ELEV));
+
+				debug( "listed: "+mlist.length);
+				
+				mlist = mlist.sortOn( 'hasTransparency', Array.NUMERIC | Array.DESCENDING);
+//				debug( "sorted: "+mlist);
+
+				var maxMap:MapInfo = mlist[ mlist.length-1];
+				tl.mapInfo = maxMap;
+				tl.viewport = maxMap.bounds.clone();
+				
+ 				for each( var m:MapInfo in mlist) {
+					lay = genLayer( m);
+					lay.visible = false;
+					
+//					lay.alpha = m.alpha;
+//					lay.alpha = 0.7;
+					
+					tl.addChild( lay);
+					mapLayers[ m]= lay; 		
+//					tl.updateView();
+
+					item = { label:m.name, data:lay};
+					
+					vislist.addItem( item);
+					
+					ladded++;
+				}
+				lay.visible = true;
+
+				reorderLayers();
+				
+ 				defStyle = new SymbolStyle();
+
+ 				defStyle.normal.line.color = 0xff0000;
+ 				defStyle.normal.line.width = 4;
+
+ 				defStyle.selected.line.color = 0xff4040;
+ 				defStyle.selected.line.width = 4;
+
+				defStyle.icon.color = 0xffffff;
+				defStyle.icon.alpha = 1.0;
+				defStyle.icon.scale = 1.0;
+				defStyle.icon.icon = 'Hexa';
+				
+				tl.updateView();
+				
+				//MacMouseWheel.setup( stage); 				
+ 			}
+ 			
+ 			protected function handleAdd( evt:DragEvent):void {
+ 				if ( evt.dragInitiator != lVisi) {
+	 				var addL:Array = List( evt.dragInitiator).selectedItems;
+	 				debug( "add layer"+addL);
+	 				
+	 				for( var i:int = 0; i < addL.length; i++) {
+	 					addLayer( addL[ i].data);
+	 				}
+ 				}
+ 				
+ 				callLater( reorderLayers);
+ 			}
+ 			
+ 			protected function reorderLayers():void {
+// 				debug( "reorder");
+ 				var off:int = lVisi.dataProvider.length -1;
+ 				
+ 				var item:Object = lVisi.selectedItem;
+ 				
+ 				for( var i:int = 0; i < lVisi.dataProvider.length; i++) {
+ 					var lay:MapLayer = MapLayer( lVisi.dataProvider[i].data);
+ 					var temp:AdaptiveLayer = mapLayers[ lay.mapInfo];
+// 					debug( "  set: "+lay.mapInfo.name+" @ "+(off - i));
+ 					temp.priority = i;
+ 					tl.setChildIndex( temp, off - i);
+ 				}
+ 				
+ 				lVisi.selectedItem = item;
+ 			}
+ 			
+ 			protected function handleRemove( evt:DragEvent):void {
+ 				var addL:Array = List( evt.dragInitiator).selectedItems;
+ 				debug( "rem "+addL);
+ 				
+ 				for( var i:int = 0; i < addL.length; i++) {
+ 					var mi:MapInfo = MapInfo( addL[i].data);
+ 					var temp:AdaptiveLayer = mapLayers[ mi];
+ 					tl.removeChild( temp);
+
+ 					delete mapLayers[ mi];
+ 				}
+ 			}
+
+ 			protected function genLayer( mi:MapInfo):MapLayer {
+// 				debug( "adding layer: "+mi.name);
+ 				var temp:AdaptiveLayer = new AdaptiveLayer();
+				temp.loadQueue = loadQueue;
+				temp.mapInfo = mi;
+				temp.priority = 1;
+				
+				return temp;
+ 			}
+ 						
+ 			protected function addLayer( mi:MapInfo):void {
+// 				debug( "adding layer: "+mi.name);
+ 				var temp:AdaptiveLayer = new AdaptiveLayer();
+				temp.loadQueue = loadQueue;
+				temp.mapInfo = mi;
+				temp.priority = 1;
+				tl.addChild( temp);
+				mapLayers[ mi]= temp; 		
+				
+				tl.updateView();
+ 			}
+
+			protected function handleSelection( evt:ListEvent):void {
+				debug( "switch map to: "+lVisi.selectedItem.data.name);
+			}		
+			
+	 		protected function handleProgress( evt:ProgressEvent):void {
+	//			debug( "progress: "+evt.bytesLoaded+" / "+evt.bytesTotal);
+				var pe:ProgressEvent = new ProgressEvent( ProgressEvent.PROGRESS);
+				pe.bytesLoaded = evt.bytesLoaded;
+				pe.bytesTotal = evt.bytesTotal;
+				dispatchEvent( pe);
+			}
+
+			private function faultHandler(fault:FaultEvent):void {
+				debug( "err: "+fault);
+//			    CursorManager.removeBusyCursor();
+			    debug( "code:\n" + fault.fault.faultCode + "\n\nMessage:\n" + fault.fault.faultString + "\n\nDetail:\n" + fault.fault.faultDetail);
+			}
+
+ 			protected function addSymbols( evt:Event):void {
+				var num:int = 250;
+				var max:int = symData.length;
+				var mi:MapInfo = tl.mapInfo;
+				for( var j:int = 0; j < num; j++) {
+					dataProvider.addItem( { name:'symbol '+(max+j), location:'POINT( '+( mi.bounds.left + mi.bounds.width * Math.random())+' '+( mi.bounds.bottom + mi.bounds.height * Math.random())+')', val1:100*Math.random(), val2:100*Math.random()});
+					debug( " @ "+'POINT( '+( mi.bounds.left + mi.bounds.width * Math.random())+' '+( mi.bounds.bottom + mi.bounds.height * Math.random())+')');
+				}
+				tl.updateView();
+ 			}
+ 			
+ 			protected function addCharts( evt:Event):void {
+				var num:int = 50;
+				var max:int = symChart.length + num;
+				var mi:MapInfo = tl.mapInfo;
+				for( var j:int = 0; j < num; j++) {
+					chartProvider.addItem( { name:''+max+' charts', location:'POINT( '+( mi.bounds.left + mi.bounds.width * Math.random())+' '+( mi.bounds.bottom + mi.bounds.height * Math.random())+')', val1:Math.round( 100*Math.random()), val2:Math.round( 100*Math.random())});
+				}
+				tl.updateView();
+ 			}
+ 			
+ 			protected function doZoomIn( evt:Event):void {
+ 				tl.zoomIn();
+ 			}
+
+ 			protected function doZoomOut( evt:Event):void {
+ 				tl.zoomOut();
+ 			}
+
+ 			protected function debug( txt:String):void {
+ 				trace( "DBG MxM: "+txt);
+ 			}
+ 		]]>
+ 	</mx:Script>
+	<mx:HDividedBox width="100%" height="100%" paddingBottom="2" paddingLeft="2" paddingRight="2" paddingTop="2" borderStyle="none">
+		<mx:Box id="map" width="100%" height="100%" clipContent="true">
+			<ns1:Lighttable id="tl" width="100%" height="100%"  borderStyle="solid"/>
+		</mx:Box>
+		<mx:VBox verticalAlign="bottom" width="240" height="100%" borderStyle="solid">
+			<mx:VBox width="100%" height="100%" y="0">	
+				<mx:Label id="copyright" width="100%" text="MapTech" fontWeight="bold"/>
+				<mx:HBox width="100%">
+					<mx:Button label="zoom -" buttonDown="doZoomOut( event);" width="50%" repeatInterval="100" repeatDelay="800" autoRepeat="true"/>
+					<mx:Button label="zoom +" width="50%" buttonDown="doZoomIn( event);" repeatInterval="100" repeatDelay="800" autoRepeat="true"/>
+				</mx:HBox>
+				<mx:Label text="Layers:"/>
+				<mx:List name="visi:" id="lVisi" height="100%" dataProvider="{vislist}" change="handleSelection( event);"  width="100%" itemRenderer="LayerControl" paddingBottom="1" paddingLeft="1" paddingRight="1" paddingTop="1" dragEnabled="true" dragMoveEnabled="true" dropEnabled="true" alternatingItemColors="[0xffffff,0xf0f0f0]"/>
+				<!-- dragEnabled="true" dragMoveEnabled="true" dropEnabled="true"  -->					
+			</mx:VBox>
+			<mx:ProgressBar width="100%" id="pbLoad"/>
+		</mx:VBox>
+		<!-- mx:ApplicationControlBar width="100%" -->
+		<!-- /mx:ApplicationControlBar -->		
+	</mx:HDividedBox>
+</mx:Application>
